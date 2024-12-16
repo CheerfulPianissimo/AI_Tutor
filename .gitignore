@@ -1,3 +1,5 @@
 *.pdf
+*.json
+__pycache__
 CST*/
 venv/

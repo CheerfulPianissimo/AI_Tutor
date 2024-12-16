@@ -3,7 +3,7 @@ from litellm import completion
 from jinja2 import Environment, FileSystemLoader
 import os
 import json
-
+#import rag
 
 os.environ["GEMINI_API_KEY"] = os.getenv('GEMINI_API_KEY')
 
@@ -31,14 +31,14 @@ def syllabus_txt_to_json(syllabus_txt):
                     "course": {
                         "type": "object", 
                         "properties": {
-                            "course_code": { "type": "string", "description": "Course code" },
+                            "course_code": { "type": "string", "description": "Course code with no spaces" },
                             "course_title": { "type": "string", "description": "Title of the course" },                            
                             "modules": {
                                 "type": "array",
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "module_title": { "type": "string" },
+                                        "module_title": { "type": "string", "description": "Title of the module without 'Module X' in it" },
                                         "duration": { "type": "string", "description": "Duration of the module in hours" },
                                         "topics": {
                                             "type": "array",
@@ -85,9 +85,9 @@ def get_completion(message):
     return res.choices[0].message.content
 
 
-syllabus_txt=pdf_txt_extract('syllabus2.pdf')
+syllabus_txt=pdf_txt_extract('syllabus.pdf')
 syllabus_json=syllabus_txt_to_json(syllabus_txt)
-
+print(syllabus_json)
 #syllabus_json=json.load(open("out2.json",'r'))
 print(json.dumps(syllabus_json))
 
@@ -99,7 +99,7 @@ env = Environment(loader=FileSystemLoader('.'))
 # Load templates
 syllabus_template = env.get_template('syllabus_template.html')
 topic_template = env.get_template('topic_template.html')
-
+from rag import get_rag_completion
 def syllabus_json_to_file_structure(syllabus_json):
     # Base directory for the course
     base_dir = syllabus_json["course"]["course_code"]
@@ -119,11 +119,13 @@ def syllabus_json_to_file_structure(syllabus_json):
         for topic in module["topics"]:
             course_title=syllabus_json["course"]["course_title"]
             topic_title=topic["title"]
-            content=get_completion(f"""
-                    In the context of a college course on "{course_title}", 
-                    create course text for the topic "{topic_title}" 
-                    Do not include anything not directly relating to this topic.
-                    """)
+            content=get_rag_completion( f"""In the context of a college course on "{course_title}", 
+                        create course text for the topic "{topic_title}"  
+                        Use the content from the given documents given whenever possible with attribution.
+                        Make sure that your output should have at least everything on this topic that the given notes have 
+                        but strip out any credits or non-textual elements not directly relating to the topic. Explain in some detail.
+            """)
+            
             topic_html = topic_template.render(topic=topic,content=content)
             topic_filename = os.path.join(module_dir, f"{topic['number']}.html")
             with open(topic_filename, "w") as topic_file:
